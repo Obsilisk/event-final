@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Add New Event{% endblock %}
+
+{% block content %}
+    <section class="dashboard-section">
+        <h2>Add New Event</h2>
+        
+        <form method="POST" action="{{ url_for('add_event') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="title">Event Title</label>
+                <input type="text" id="title" name="title" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" required></textarea>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="time">Time</label>
+                    <input type="time" id="time" name="time" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="location">Location</label>
+                <input type="text" id="location" name="location" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="image">Event Image</label>
+                <input type="file" id="image" name="image" accept="image/*">
+            </div>
+            
+            <h3>Ticket Types</h3>
+            <div id="ticket-types-container">
+                <div class="ticket-type-group">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ticket_name_0">Ticket Name</label>
+                            <input type="text" id="ticket_name_0" name="ticket_name[]" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="ticket_price_0">Price ($)</label>
+                            <input type="number" id="ticket_price_0" name="ticket_price[]" min="0" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="ticket_quantity_0">Quantity</label>
+                            <input type="number" id="ticket_quantity_0" name="ticket_quantity[]" min="1" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" id="add-ticket-type" class="btn btn-secondary add-ticket-btn">
+                <i class="fas fa-plus"></i> Add Another Ticket Type
+            </button>
+            
+            <button type="submit" class="btn btn-primary">Create Event</button>
+        </form>
+    </section>
+    
+    <script>
+        document.getElementById('add-ticket-type').addEventListener('click', function() {
+            const container = document.getElementById('ticket-types-container');
+            const count = container.children.length;
+            
+            const newGroup = document.createElement('div');
+            newGroup.className = 'ticket-type-group';
+            newGroup.innerHTML = `
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="ticket_name_${count}">Ticket Name</label>
+                        <input type="text" id="ticket_name_${count}" name="ticket_name[]" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ticket_price_${count}">Price ($)</label>
+                        <input type="number" id="ticket_price_${count}" name="ticket_price[]" min="0" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ticket_quantity_${count}">Quantity</label>
+                        <input type="number" id="ticket_quantity_${count}" name="ticket_quantity[]" min="1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" class="btn btn-danger remove-ticket" style="margin-top: 1.75rem;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(newGroup);
+            
+            // Add event listener to the new remove button
+            newGroup.querySelector('.remove-ticket').addEventListener('click', function() {
+                container.removeChild(newGroup);
+            });
+        });
+    </script>
+{% endblock %}

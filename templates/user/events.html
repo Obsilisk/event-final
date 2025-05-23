@@ -1,0 +1,101 @@
+{% extends "base.html" %} {% block title %}{{ event.title }} - Register{%
+endblock %} {% block content %}
+<section class="event-registration">
+  <h2>Register for {{ event.title }}</h2>
+
+  <div class="event-details">
+    <img
+      src="{{ url_for('static', filename='images/events/' + event.image_url) }}"
+      alt="{{ event.title }}"
+      class="event-image"
+      onerror="this.src='{{ url_for('static', filename='images/default.jpg') }}'"
+    />
+    <p><strong>Date:</strong> {{ event.date }}</p>
+    <p><strong>Time:</strong> {{ event.time }}</p>
+    <p><strong>Location:</strong> {{ event.location }}</p>
+    <p>{{ event.description }}</p>
+  </div>
+
+  <form method="POST" class="registration-form">
+    <div class="form-group">
+      <label for="ticket_type">Select Ticket Type:</label>
+      <select name="ticket_type" id="ticket_type" required>
+        {% for ticket in ticket_types %}
+        <option value="{{ ticket.ticket_type_id }}">
+          {{ ticket.name }} - ₹{{ ticket.price }} ({{ ticket.quantity }}
+          available)
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="quantity">Number of Tickets:</label>
+      <input
+        type="number"
+        name="quantity"
+        id="quantity"
+        min="1"
+        max="10"
+        value="1"
+        required
+      />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Register Now</button>
+  </form>
+</section>
+
+<style>
+  .event-registration {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 1rem;
+  }
+
+  .event-details {
+    margin-bottom: 2rem;
+  }
+
+  .event-image {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 1rem;
+  }
+
+  .registration-form {
+    background: #f5f5f5;
+    padding: 2rem;
+    border-radius: 8px;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  select,
+  input {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .btn-primary {
+    background: #007bff;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover {
+    background: #0056b3;
+  }
+</style>
+{% endblock %}

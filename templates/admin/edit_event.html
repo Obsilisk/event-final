@@ -1,0 +1,573 @@
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+import mysql.connector
+from datetime import datetime
+import os
+from functools import wraps
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'
+
+# Database configuration
+db_config = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': '',
+    'database': 'event_management'
+}
+
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'events')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Ensure upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Helper function for file uploads
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Decorator to check if user is logged in
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Decorator to check if admin is logged in
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'admin_id' not in session:
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Home page
+@app.route('/')
+def index():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    # Get upcoming events
+    cursor.execute("SELECT * FROM events WHERE date >= CURDATE() ORDER BY date ASC LIMIT 3")
+    events = cursor.fetchall()
+    
+    # Get ticket types for each event
+    for event in events:
+        cursor.execute("SELECT * FROM ticket_types WHERE event_id = %s", (event['event_id'],))
+        event['ticket_types'] = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('index.html', events=events)
+
+# User registration
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        full_name = request.form['full_name']
+        phone = request.form.get('phone', '')
+        
+        hashed_password = generate_password_hash(password)
+        
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "INSERT INTO users (username, email, password, full_name, phone) VALUES (%s, %s, %s, %s, %s)",
+                (username, email, hashed_password, full_name, phone)
+            )
+            conn.commit()
+            flash('Registration successful! Please login.', 'success')
+            return redirect(url_for('login'))
+        except mysql.connector.Error as err:
+            flash('Username or email already exists!', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('auth/register.html')
+
+# User login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = user['user_id']
+            session['username'] = user['username']
+            session['user_type'] = 'user'
+            flash('Login successful!', 'success')
+            return redirect(url_for('user_dashboard'))
+        else:
+            flash('Invalid username or password!', 'danger')
+    
+    return render_template('auth/login.html')
+
+# Admin login
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT * FROM admin WHERE username = %s", (username,))
+        admin = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if admin and check_password_hash(admin['password'], password):
+            session['admin_id'] = admin['admin_id']
+            session['username'] = admin['username']
+            session['user_type'] = 'admin'
+            flash('Admin login successful!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash('Invalid admin credentials!', 'danger')
+    
+    return render_template('auth/login.html', admin=True)
+
+# User dashboard
+@app.route('/user/dashboard')
+@login_required
+def user_dashboard():
+    if session.get('user_type') != 'user':
+        return redirect(url_for('login'))
+    
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    # Get user's upcoming events
+    cursor.execute("""
+        SELECT e.*, ue.registration_date, tt.name as ticket_type, tt.price, ue.quantity
+        FROM user_events ue
+        JOIN events e ON ue.event_id = e.event_id
+        JOIN ticket_types tt ON ue.ticket_type_id = tt.ticket_type_id
+        WHERE ue.user_id = %s AND e.date >= CURDATE()
+        ORDER BY e.date ASC
+    """, (session['user_id'],))
+    upcoming_events = cursor.fetchall()
+    
+    # Get all events for browsing
+    cursor.execute("SELECT * FROM events WHERE date >= CURDATE() ORDER BY date ASC")
+    all_events = cursor.fetchall()
+    
+    # Get ticket types for each event
+    for event in all_events:
+        cursor.execute("SELECT * FROM ticket_types WHERE event_id = %s", (event['event_id'],))
+        event['ticket_types'] = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('user/dashboard.html', 
+                         upcoming_events=upcoming_events, 
+                         all_events=all_events)
+
+# Admin dashboard
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    # Get all events
+    cursor.execute("SELECT * FROM events ORDER BY date DESC")
+    events = cursor.fetchall()
+    
+    # Get total registrations
+    cursor.execute("SELECT COUNT(*) as total FROM user_events")
+    total_registrations = cursor.fetchone()['total']
+    
+    # Get upcoming events count
+    cursor.execute("SELECT COUNT(*) as upcoming FROM events WHERE date >= CURDATE()")
+    upcoming_events = cursor.fetchone()['upcoming']
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin/dashboard.html', 
+                         events=events, 
+                         total_registrations=total_registrations,
+                         upcoming_events=upcoming_events)
+
+# Add new event (admin)
+@app.route('/admin/events/add', methods=['GET', 'POST'])
+@admin_required
+def add_event():
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        date = request.form['date']
+        time = request.form['time']
+        location = request.form['location']
+        
+        # Handle file upload
+        image = request.files['image']
+        image_url = ''
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image.save(image_path)
+            image_url = filename
+        
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(
+                "INSERT INTO events (title, description, date, time, location, image_url) VALUES (%s, %s, %s, %s, %s, %s)",
+                (title, description, date, time, location, image_url)
+            )
+            event_id = cursor.lastrowid
+            
+            # Add ticket types
+            ticket_types = request.form.getlist('ticket_name[]')
+            ticket_prices = request.form.getlist('ticket_price[]')
+            ticket_quantities = request.form.getlist('ticket_quantity[]')
+            
+            for name, price, quantity in zip(ticket_types, ticket_prices, ticket_quantities):
+                if name and price and quantity:
+                    cursor.execute(
+                        "INSERT INTO ticket_types (event_id, name, price, quantity) VALUES (%s, %s, %s, %s)",
+                        (event_id, name, float(price), int(quantity))
+                    )
+            
+            conn.commit()
+            flash('Event added successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        except mysql.connector.Error as err:
+            conn.rollback()
+            flash('Error adding event: ' + str(err), 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('admin/add_event.html')
+
+# Manage events (admin)
+@app.route('/admin/events/manage')
+@admin_required
+def manage_events():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT e.*, COUNT(ue.registration_id) as registrations
+        FROM events e
+        LEFT JOIN user_events ue ON e.event_id = ue.event_id
+        GROUP BY e.event_id
+        ORDER BY e.date DESC
+    """)
+    events = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin/manage_events.html', events=events)
+
+# Edit event (admin)
+@app.route('/admin/events/edit/<int:event_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_event(event_id):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        date = request.form['date']
+        time = request.form['time']
+        location = request.form['location']
+        
+        # Handle file upload
+        image = request.files['image']
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            image.save(image_path)
+            cursor.execute(
+                "UPDATE events SET image_url = %s WHERE event_id = %s",
+                (filename, event_id)
+            )
+        
+        try:
+            cursor.execute(
+                "UPDATE events SET title = %s, description = %s, date = %s, time = %s, location = %s WHERE event_id = %s",
+                (title, description, date, time, location, event_id)
+            )
+            
+            # Update ticket types
+            ticket_type_ids = request.form.getlist('ticket_type_id[]')
+            ticket_names = request.form.getlist('ticket_name[]')
+            ticket_prices = request.form.getlist('ticket_price[]')
+            ticket_quantities = request.form.getlist('ticket_quantity[]')
+            
+            for type_id, name, price, quantity in zip(ticket_type_ids, ticket_names, ticket_prices, ticket_quantities):
+                if type_id:  # Update existing ticket
+                    cursor.execute(
+                        "UPDATE ticket_types SET name = %s, price = %s, quantity = %s WHERE ticket_type_id = %s",
+                        (name, float(price), int(quantity), int(type_id))
+                    )
+                else:  # Add new ticket
+                    cursor.execute(
+                        "INSERT INTO ticket_types (event_id, name, price, quantity) VALUES (%s, %s, %s, %s)",
+                        (event_id, name, float(price), int(quantity))
+                    )
+            
+            conn.commit()
+            flash('Event updated successfully!', 'success')
+            return redirect(url_for('manage_events'))
+        except mysql.connector.Error as err:
+            conn.rollback()
+            flash('Error updating event: ' + str(err), 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    # GET request - show edit form
+    cursor.execute("SELECT * FROM events WHERE event_id = %s", (event_id,))
+    event = cursor.fetchone()
+    
+    if not event:
+        flash('Event not found!', 'danger')
+        return redirect(url_for('manage_events'))
+    
+    cursor.execute("SELECT * FROM ticket_types WHERE event_id = %s", (event_id,))
+    ticket_types = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin/edit_event.html', event=event, ticket_types=ticket_types)
+
+# Delete event (admin)
+@app.route('/admin/events/delete/<int:event_id>', methods=['POST'])
+@admin_required
+def delete_event(event_id):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM events WHERE event_id = %s", (event_id,))
+        conn.commit()
+        flash('Event deleted successfully!', 'success')
+    except mysql.connector.Error as err:
+        conn.rollback()
+        flash('Error deleting event: ' + str(err), 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('manage_events'))
+
+# View event registrations (admin)
+@app.route('/admin/events/registrations/<int:event_id>')
+@admin_required
+def event_registrations(event_id):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT title FROM events WHERE event_id = %s", (event_id,))
+    event = cursor.fetchone()
+    
+    if not event:
+        flash('Event not found!', 'danger')
+        return redirect(url_for('manage_events'))
+    
+    cursor.execute("""
+        SELECT u.username, u.full_name, u.email, tt.name as ticket_type, 
+               ue.quantity, tt.price, ue.registration_date, p.status
+        FROM user_events ue
+        JOIN users u ON ue.user_id = u.user_id
+        JOIN ticket_types tt ON ue.ticket_type_id = tt.ticket_type_id
+        LEFT JOIN payments p ON ue.registration_id = p.registration_id
+        WHERE ue.event_id = %s
+        ORDER BY ue.registration_date DESC
+    """, (event_id,))
+    registrations = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin/event_registrations.html', 
+                         event=event, 
+                         registrations=registrations)
+
+# Register for event (user)
+@app.route('/events/register/<int:event_id>', methods=['GET', 'POST'])
+@login_required
+def register_event(event_id):
+    if request.method == 'POST':
+        ticket_type_id = request.form['ticket_type']
+        quantity = int(request.form['quantity'])
+        
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Check ticket availability
+            cursor.execute("SELECT quantity, price FROM ticket_types WHERE ticket_type_id = %s", (ticket_type_id,))
+            ticket = cursor.fetchone()
+            
+            if not ticket or ticket['quantity'] < quantity:
+                flash('Not enough tickets available!', 'danger')
+                return redirect(url_for('user_dashboard'))
+            
+            # Register user for event
+            cursor.execute(
+                "INSERT INTO user_events (user_id, event_id, ticket_type_id, quantity) VALUES (%s, %s, %s, %s)",
+                (session['user_id'], event_id, ticket_type_id, quantity)
+            )
+            registration_id = cursor.lastrowid
+            
+            # Update ticket quantity
+            cursor.execute(
+                "UPDATE ticket_types SET quantity = quantity - %s WHERE ticket_type_id = %s",
+                (quantity, ticket_type_id)
+            )
+            
+            # Create payment record
+            total_amount = ticket['price'] * quantity
+            
+            cursor.execute(
+                "INSERT INTO payments (registration_id, amount, status) VALUES (%s, %s, 'completed')",
+                (registration_id, total_amount)
+            )
+            
+            conn.commit()
+            flash('Registration successful!', 'success')
+            return redirect(url_for('user_dashboard'))
+        except mysql.connector.Error as err:
+            conn.rollback()
+            flash('Error during registration: ' + str(err), 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    # GET request - show registration form
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT * FROM events WHERE event_id = %s", (event_id,))
+    event = cursor.fetchone()
+    
+    if not event:
+        flash('Event not found!', 'danger')
+        return redirect(url_for('user_dashboard'))
+    
+    cursor.execute("SELECT * FROM ticket_types WHERE event_id = %s AND quantity > 0", (event_id,))
+    ticket_types = cursor.fetchall()
+    
+    if not ticket_types:
+        flash('No tickets available for this event!', 'danger')
+        return redirect(url_for('user_dashboard'))
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('user/events.html', event=event, ticket_types=ticket_types)
+
+# View user's events
+@app.route('/user/events')
+@login_required
+def my_events():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT e.*, e.image_url, ue.registration_date, tt.name as ticket_type, tt.price, ue.quantity, p.status
+        FROM user_events ue
+        JOIN events e ON ue.event_id = e.event_id
+        JOIN ticket_types tt ON ue.ticket_type_id = tt.ticket_type_id
+        LEFT JOIN payments p ON ue.registration_id = p.registration_id
+        WHERE ue.user_id = %s
+        ORDER BY e.date DESC
+    """, (session['user_id'],))
+    registrations = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('user/my_events.html', registrations=registrations)
+
+# Cancel registration (user)
+@app.route('/user/events/cancel/<int:registration_id>', methods=['POST'])
+@login_required
+def cancel_registration(registration_id):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Get registration details
+        cursor.execute("""
+            SELECT ue.*, tt.ticket_type_id, tt.event_id
+            FROM user_events ue
+            JOIN ticket_types tt ON ue.ticket_type_id = tt.ticket_type_id
+            WHERE ue.registration_id = %s AND ue.user_id = %s
+        """, (registration_id, session['user_id']))
+        registration = cursor.fetchone()
+        
+        if not registration:
+            flash('Registration not found!', 'danger')
+            return redirect(url_for('my_events'))
+        
+        # Return tickets to available pool
+        cursor.execute("""
+            UPDATE ticket_types 
+            SET quantity = quantity + %s 
+            WHERE ticket_type_id = %s
+        """, (registration['quantity'], registration['ticket_type_id']))
+        
+        # Delete registration
+        cursor.execute("DELETE FROM user_events WHERE registration_id = %s", (registration_id,))
+        
+        # Delete payment record
+        cursor.execute("DELETE FROM payments WHERE registration_id = %s", (registration_id,))
+        
+        conn.commit()
+        flash('Registration canceled successfully!', 'success')
+    except mysql.connector.Error as err:
+        conn.rollback()
+        flash('Error canceling registration: ' + str(err), 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('my_events'))
+
+# Logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(debug=True)

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event.title }} - Registrations{% endblock %}
+
+{% block content %}
+    <section class="dashboard-section">
+        <div class="section-header">
+            <h2>Registrations for {{ event.title }}</h2>
+            <a href="{{ url_for('manage_events') }}" class="btn btn-secondary">Back to Events</a>
+        </div>
+        
+        {% if registrations %}
+            <table class="events-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Ticket Type</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Registration Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reg in registrations %}
+                        <tr>
+                            <td>{{ reg.full_name }} ({{ reg.username }})</td>
+                            <td>{{ reg.email }}</td>
+                            <td>{{ reg.ticket_type }}</td>
+                            <td>{{ reg.quantity }}</td>
+                            <td>${{ reg.price * reg.quantity }}</td>
+                            <td>{{ reg.registration_date.strftime('%B %d, %Y') }}</td>
+                            <td>
+                                <span class="badge badge-{{ 'success' if reg.status == 'completed' else 'warning' }}">
+                                    {{ reg.status }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No registrations for this event yet.</p>
+        {% endif %}
+    </section>
+{% endblock %}

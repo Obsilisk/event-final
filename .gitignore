@@ -1,0 +1,42 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# VS Code settings
+.vscode/
+
+# Environment variables
+.env
+
+# Database files
+*.db
+*.sqlite3
+
+# Uploaded files
+static/images/events/*
+!static/images/events/.gitkeep
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Distribution/packaging
+dist/
+build/
+*.egg-info/
+
+# PyCharm files
+.idea/
+
+# Local development settings
+instance/

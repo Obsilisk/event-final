@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+    <h1>Welcome, {{ session['username'] }}</h1>
+    
+    <section class="dashboard-section">
+        <h2>Your Upcoming Events</h2>
+        {% if upcoming_events %}
+            <div class="events-list">
+                {% for event in upcoming_events %}
+                    <div class="event-item">
+                        <div class="event-details">
+                            <h3>{{ event.title }}</h3>
+                            <p><i class="fas fa-calendar-day"></i> {{ event.date.strftime('%B %d, %Y') }} at {{ event.time.strftime('%I:%M %p') }}</p>
+                            <p><i class="fas fa-map-marker-alt"></i> {{ event.location }}</p>
+                            <p>Ticket: {{ event.ticket_type }} ({{ event.quantity }} x ${{ event.price }})</p>
+                            <p>Registered on: {{ event.registration_date.strftime('%B %d, %Y') }}</p>
+                        </div>
+                        <div class="event-actions">
+                            <a href="#" class="btn btn-secondary">View Details</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>You don't have any upcoming events. Browse events below to register!</p>
+        {% endif %}
+    </section>
+    
+    <section class="dashboard-section">
+        <h2>Available Events</h2>
+        <div class="events-grid">
+            {% for event in all_events %}
+                <div class="event-card">
+                    {% if event.image_url %}
+                        <img src="{{ url_for('static', filename='images/events/' + event.image_url) }}" alt="{{ event.title }}">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='images/placeholder.jpg') }}" alt="{{ event.title }}">
+                    {% endif %}
+                    <div class="event-info">
+                        <h3>{{ event.title }}</h3>
+                        <p><i class="fas fa-calendar-day"></i> {{ event.date.strftime('%B %d, %Y') }}</p>
+                        <p><i class="fas fa-map-marker-alt"></i> {{ event.location }}</p>
+                        <div class="ticket-types">
+                            {% for ticket in event.ticket_types %}
+                                <span class="ticket-badge">{{ ticket.name }} - ${{ ticket.price }}</span>
+                            {% endfor %}
+                        </div>
+                        <a href="{{ url_for('register_event', event_id=event.event_id) }}" class="btn btn-secondary">Register Now</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+    <h1>Admin Dashboard</h1>
+    <p>Welcome, {{ session['username'] }}</p>
+    
+    <div class="admin-stats">
+        <div class="stat-card">
+            <h3>Total Events</h3>
+            <p>{{ events|length }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Upcoming Events</h3>
+            <p>{{ upcoming_events }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Total Registrations</h3>
+            <p>{{ total_registrations }}</p>
+        </div>
+    </div>
+    
+    <section class="dashboard-section">
+        <div class="section-header">
+            <h2>Recent Events</h2>
+            <a href="{{ url_for('add_event') }}" class="btn btn-primary">Add New Event</a>
+        </div>
+        
+        <table class="events-table">
+            <thead>
+                <tr>
+                    <th>Event</th>
+                    <th>Date</th>
+                    <th>Location</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                    <tr>
+                        <td>{{ event.title }}</td>
+                        <td>{{ event.date.strftime('%B %d, %Y') }}</td>
+                        <td>{{ event.location }}</td>
+                        <td>
+                            <a href="{{ url_for('delete_event', event_id=event.event_id) }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this event?')">Delete</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+{% endblock %}

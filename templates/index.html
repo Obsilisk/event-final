@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Discover Amazing Events</h1>
+            <p>Find and register for events that match your interests</p>
+            {% if 'user_id' not in session %}
+                <a href="{{ url_for('register') }}" class="btn btn-primary">Join Now</a>
+            {% else %}
+                <a href="{{ url_for('user_dashboard') }}" class="btn btn-primary">Browse Events</a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="featured-events">
+        <h2>Upcoming Events</h2>
+        <div class="events-grid">
+            {% for event in events %}
+            <div class="event-card">
+                {% if event.image_url %}
+                <img src="{{ url_for('static', filename='images/events/' + event.image_url) }}" 
+                     alt="{{ event.title }}" class="event-image">
+                {% endif %}
+                <div class="event-details">
+                    <h3>{{ event.title }}</h3>
+                    <p>
+                        <i class="fas fa-calendar-day"></i> 
+                        {% if event.date %}
+                            {{ event.date.strftime('%B %d, %Y') }}
+                        {% endif %}
+                        {% if event.time %}
+                            at {{ event.time.strftime('%I:%M %p') }}
+                        {% endif %}
+                    </p>
+                    <p><i class="fas fa-map-marker-alt"></i> {{ event.location }}</p>
+                    <a href="{{ url_for('register_event', event_id=event.event_id) }}" 
+                       class="btn btn-primary">Register Now</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="feature">
+            <i class="fas fa-ticket-alt"></i>
+            <h3>Easy Registration</h3>
+            <p>Simple and quick event registration process</p>
+        </div>
+        <div class="feature">
+            <i class="fas fa-calendar-check"></i>
+            <h3>Manage Events</h3>
+            <p>Keep track of all your registered events</p>
+        </div>
+        <div class="feature">
+            <i class="fas fa-headset"></i>
+            <h3>24/7 Support</h3>
+            <p>Our team is always here to help you</p>
+        </div>
+    </section>
+{% endblock %}
